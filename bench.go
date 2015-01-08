@@ -79,8 +79,16 @@ func main() {
 		n++
 		for i := range pkgs {
 			pkg := pkgs[i]
-			beforeTest := beforeTests[pkg]
-			afterTest := afterTests[pkg]
+
+			beforeTest, ok := beforeTests[pkg]
+			if !ok {
+				continue
+			}
+
+			afterTest, ok := afterTests[pkg]
+			if !ok {
+				continue
+			}
 
 			start = time.Now()
 			printf(1, "Running before benchmarks: %s", pkg)
