@@ -143,7 +143,7 @@ func benchcmp(pkg, before, after string) string {
 	pkg = strings.Replace(pkg, "/", "-", -1)
 	beforef := writetemp("before-"+pkg+".bench", before)
 	afterf := writetemp("after-"+pkg+".bench", after)
-	cmd := exec.Command("benchcmp", "-mag", "-best", beforef, afterf)
+	cmd := exec.Command("benchcmp", "-mag", "-best", "-changed", beforef, afterf)
 	// don't die on errors, so don't use runCmd
 	printf(1, "Running %v", commandString(cmd))
 	out, _ := cmd.CombinedOutput()
