@@ -51,43 +51,70 @@ func main() {
 	if err != nil {
 		die(err)
 	}
-	defer os.RemoveAll(tempdir)
 	printf(0, "Using temp dir %v", tempdir)
 
-	printf(0, "Compiling before.test")
-	beforeTest := compileTest(*gorootBefore, "before.test")
+	printf(0, "Compiling before tests")
+	beforeTests := compileTests(*gorootBefore, "before", pkgs)
 
-	printf(0, "Compiling after.test")
-	afterTest := compileTest(*gorootAfter, "after.test")
+	printf(0, "Compiling after tests")
+	afterTests := compileTests(*gorootAfter, "after", pkgs)
 
-	printf(0, "Running before.test")
-	runTest(beforeTest, "-test.run="+*testRun)
+	printf(0, "Running before tests")
+	for _, test := range beforeTests {
+		runTest(test, "-test.run="+*testRun)
+	}
 
-	printf(0, "Running after.test")
-	runTest(afterTest, "-test.run="+*testRun)
+	printf(0, "Running after tests")
+	for _, test := range afterTests {
+		runTest(test, "-test.run="+*testRun)
+	}
 
 	printf(0, "Elapsed: %v\n", time.Now().Sub(start))
 
-	var beforeBench string
-	var afterBench string
+	beforeBenches := make(map[string]string)
+	afterBenches := make(map[string]string)
 	var n int
 
-	start = time.Now()
 	for {
-		printf(1, "Running before benchmarks")
-		beforeBench += runTest(beforeTest, "-test.run=NONE", "-test.bench="+*testBench)
-		time.Sleep(*sleep)
-
-		printf(1, "Running after benchmarks")
-		afterBench += runTest(afterTest, "-test.run=NONE", "-test.bench="+*testBench)
-
 		n++
-		printf(0, "--- %d iter (%v each):", n, time.Now().Sub(start)/time.Duration(n))
-		out := benchcmp(beforeBench, afterBench)
+		for i := range pkgs {
+			pkg := pkgs[i]
+			beforeTest := beforeTests[pkg]
+			afterTest := afterTests[pkg]
 
-		printf(0, "%s\n\n", out)
+			start = time.Now()
+			printf(1, "Running before benchmarks: %s", pkg)
+			beforeBenches[pkg] += runTest(beforeTest, "-test.run=NONE", "-test.bench="+*testBench)
+			time.Sleep(*sleep)
 
-		time.Sleep(*sleep)
+			printf(1, "Running after benchmarks: %s", pkg)
+			afterBenches[pkg] += runTest(afterTest, "-test.run=NONE", "-test.bench="+*testBench)
+
+			printf(0, "--- %s, %d iter (%v)", pkg, n, time.Now().Sub(start))
+			out := benchcmp(pkg, beforeBenches[pkg], afterBenches[pkg])
+			printf(0, "%s\n\n", out)
+			time.Sleep(*sleep)
+		}
+
+		if len(pkgs) > 1 {
+			printf(0, "--- ALL, %d iter", n)
+			var beforeAll string
+			var afterAll string
+			for _, pkg := range pkgs {
+				beforeAll += beforeBenches[pkg]
+				afterAll += afterBenches[pkg]
+			}
+			out := benchcmp("all", beforeAll, afterAll)
+			lines := strings.Split(out, "\n")
+			nlines := 50
+			if len(lines) < nlines {
+				nlines = len(lines) - 1
+			}
+			for _, line := range lines[:nlines] {
+				printf(0, "%s", line)
+			}
+			printf(0, "\n\n")
+		}
 	}
 }
 
@@ -100,11 +127,16 @@ func writetemp(filename, data string) string {
 	return f
 }
 
-func benchcmp(before, after string) string {
-	beforef := writetemp("before.bench", before)
-	afterf := writetemp("after.bench", after)
+func benchcmp(pkg, before, after string) string {
+	pkg = strings.Replace(pkg, "/", "-", -1)
+	beforef := writetemp("before-"+pkg+".bench", before)
+	afterf := writetemp("after-"+pkg+".bench", after)
 	cmd := exec.Command("benchcmp", "-mag", "-best", beforef, afterf)
-	return runCmd(cmd)
+	// don't die on errors, so don't use runCmd
+	printf(1, "Running %v", commandString(cmd))
+	out, _ := cmd.CombinedOutput()
+	printf(2, "%s", out)
+	return strings.TrimSpace(string(out))
 }
 
 func runTest(test string, args ...string) string {
@@ -155,15 +187,23 @@ func listStd(goroot string) []string {
 	return pkgs
 }
 
-func compileTest(goroot, filename string) string {
-	test := filepath.Join(tempdir, filename)
-	args := []string{"test", "-c", "-o", test}
-	args = append(args, flag.Args()...)
-	cmd := exec.Command("bin/go", args...)
-	cmd.Dir = goroot
-	cmd.Env = []string{"GOROOT=" + goroot}
-	runCmd(cmd)
-	return test
+func compileTests(goroot, prefix string, pkgs []string) map[string]string {
+	m := make(map[string]string)
+	for _, pkg := range pkgs {
+		filename := prefix + "-" + strings.Replace(pkg, "/", "-", -1) + ".test"
+		test := filepath.Join(tempdir, filename)
+		cmd := exec.Command("bin/go", "test", "-c", "-o", test, pkg)
+		cmd.Dir = goroot
+		cmd.Env = []string{"GOROOT=" + goroot, "PATH=" + os.Getenv("PATH")}
+		runCmd(cmd)
+		// If there is no test file, don't claim that there is one
+		_, err := os.Stat(test)
+		if err != nil {
+			continue
+		}
+		m[pkg] = test
+	}
+	return m
 }
 
 func printf(thresh int, format string, v ...interface{}) {
