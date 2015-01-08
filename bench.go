@@ -61,12 +61,12 @@ func main() {
 
 	printf(0, "Running before tests")
 	for _, test := range beforeTests {
-		runTest(test, "-test.run="+*testRun)
+		test.run("-test.run=" + *testRun)
 	}
 
 	printf(0, "Running after tests")
 	for _, test := range afterTests {
-		runTest(test, "-test.run="+*testRun)
+		test.run("-test.run=" + *testRun)
 	}
 
 	printf(0, "Elapsed: %v\n", time.Now().Sub(start))
@@ -84,11 +84,15 @@ func main() {
 
 			start = time.Now()
 			printf(1, "Running before benchmarks: %s", pkg)
-			beforeBenches[pkg] += runTest(beforeTest, "-test.run=NONE", "-test.bench="+*testBench)
+			beforeBenches[pkg] += beforeTest.run("-test.run=NONE", "-test.bench="+*testBench)
 			time.Sleep(*sleep)
 
 			printf(1, "Running after benchmarks: %s", pkg)
-			afterBenches[pkg] += runTest(afterTest, "-test.run=NONE", "-test.bench="+*testBench)
+			afterBenches[pkg] += afterTest.run("-test.run=NONE", "-test.bench="+*testBench)
+
+			if beforeBenches[pkg] == "PASS" && afterBenches[pkg] == "PASS" {
+				continue
+			}
 
 			printf(0, "--- %s, %d iter (%v)", pkg, n, time.Now().Sub(start))
 			out := benchcmp(pkg, beforeBenches[pkg], afterBenches[pkg])
@@ -139,11 +143,12 @@ func benchcmp(pkg, before, after string) string {
 	return strings.TrimSpace(string(out))
 }
 
-func runTest(test string, args ...string) string {
+func (t compiledTest) run(args ...string) string {
 	if *verbose > 1 {
 		args = append([]string{"-test.v"}, args...)
 	}
-	cmd := exec.Command(test, args...)
+	cmd := exec.Command(t.binary, args...)
+	cmd.Dir = t.dir
 	return runCmd(cmd)
 }
 
@@ -187,21 +192,32 @@ func listStd(goroot string) []string {
 	return pkgs
 }
 
-func compileTests(goroot, prefix string, pkgs []string) map[string]string {
-	m := make(map[string]string)
+func pkgDir(goroot, pkg string) string {
+	cmd := exec.Command("bin/go", "list", "-f", "{{.Dir}}", pkg)
+	cmd.Dir = goroot
+	return runCmd(cmd)
+}
+
+type compiledTest struct {
+	binary string
+	dir    string
+}
+
+func compileTests(goroot, prefix string, pkgs []string) map[string]compiledTest {
+	m := make(map[string]compiledTest)
 	for _, pkg := range pkgs {
 		filename := prefix + "-" + strings.Replace(pkg, "/", "-", -1) + ".test"
-		test := filepath.Join(tempdir, filename)
-		cmd := exec.Command("bin/go", "test", "-c", "-o", test, pkg)
+		path := filepath.Join(tempdir, filename)
+		cmd := exec.Command("bin/go", "test", "-c", "-o", path, pkg)
 		cmd.Dir = goroot
 		cmd.Env = []string{"GOROOT=" + goroot, "PATH=" + os.Getenv("PATH")}
 		runCmd(cmd)
 		// If there is no test file, don't claim that there is one
-		_, err := os.Stat(test)
+		_, err := os.Stat(path)
 		if err != nil {
 			continue
 		}
-		m[pkg] = test
+		m[pkg] = compiledTest{binary: path, dir: pkgDir(goroot, pkg)}
 	}
 	return m
 }
