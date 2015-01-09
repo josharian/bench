@@ -92,11 +92,15 @@ func main() {
 
 			start = time.Now()
 			printf(1, "Running before benchmarks: %s", pkg)
+			beforeBenches[pkg] += "\n"
 			beforeBenches[pkg] += beforeTest.run("-test.run=NONE", "-test.bench="+*testBench)
+			beforeBenches[pkg] += "\n"
 			time.Sleep(*sleep)
 
 			printf(1, "Running after benchmarks: %s", pkg)
+			afterBenches[pkg] += "\n"
 			afterBenches[pkg] += afterTest.run("-test.run=NONE", "-test.bench="+*testBench)
+			afterBenches[pkg] += "\n"
 
 			if beforeBenches[pkg] == "PASS" && afterBenches[pkg] == "PASS" {
 				continue
