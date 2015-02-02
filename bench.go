@@ -19,9 +19,11 @@ var (
 	gorootBefore = flag.String("before", "/Users/jbleechersnyder/src/go-cmp", "GOROOT for 'before'")
 	gorootAfter  = flag.String("after", "/Users/jbleechersnyder/src/go", "GOROOT for 'after'")
 
-	testRun   = flag.String("run", ".", "-test=")
-	testBench = flag.String("bench", ".", "-bench=")
-	sleep     = flag.Duration("sleep", 0, "time to sleep between benchmark runs")
+	testRun     = flag.String("run", "NONE", "-test=")
+	testBench   = flag.String("bench", ".", "-bench=")
+	testLdflags = flag.String("ldflags", "", "-ldflags=")
+
+	sleep = flag.Duration("sleep", 0, "time to sleep between benchmark runs")
 	// testBenchmem = flag.Bool("benchmem", false, "-benchmem") // TODO
 )
 
@@ -220,7 +222,7 @@ func compileTests(goroot, prefix string, pkgs []string) map[string]compiledTest 
 	for _, pkg := range pkgs {
 		filename := prefix + "-" + strings.Replace(pkg, "/", "-", -1) + ".test"
 		path := filepath.Join(tempdir, filename)
-		cmd := exec.Command("bin/go", "test", "-c", "-o", path, pkg)
+		cmd := exec.Command("bin/go", "test", "-c", "-ldflags="+*testLdflags, "-o", path, pkg)
 		cmd.Dir = goroot
 		cmd.Env = []string{"GOROOT=" + goroot, "PATH=" + os.Getenv("PATH")}
 		runCmd(cmd)
