@@ -22,6 +22,7 @@ var (
 	testRun     = flag.String("run", "NONE", "-test=")
 	testBench   = flag.String("bench", ".", "-bench=")
 	testLdflags = flag.String("ldflags", "", "-ldflags=")
+	testGcflags = flag.String("gcflags", "", "-gcflags=")
 
 	sleep = flag.Duration("sleep", 0, "time to sleep between benchmark runs")
 	// testBenchmem = flag.Bool("benchmem", false, "-benchmem") // TODO
@@ -222,7 +223,7 @@ func compileTests(goroot, prefix string, pkgs []string) map[string]compiledTest 
 	for _, pkg := range pkgs {
 		filename := prefix + "-" + strings.Replace(pkg, "/", "-", -1) + ".test"
 		path := filepath.Join(tempdir, filename)
-		cmd := exec.Command("bin/go", "test", "-c", "-ldflags="+*testLdflags, "-o", path, pkg)
+		cmd := exec.Command("bin/go", "test", "-c", "-ldflags="+*testLdflags, "-gcflags="+*testGcflags, "-o", path, pkg)
 		cmd.Dir = goroot
 		cmd.Env = []string{"GOROOT=" + goroot, "PATH=" + os.Getenv("PATH")}
 		runCmd(cmd)
