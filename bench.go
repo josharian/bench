@@ -19,13 +19,13 @@ var (
 	gorootBefore = flag.String("before", "/Users/jbleechersnyder/src/go-cmp", "GOROOT for 'before'")
 	gorootAfter  = flag.String("after", "/Users/jbleechersnyder/src/go", "GOROOT for 'after'")
 
-	testRun     = flag.String("run", "NONE", "-test=")
-	testBench   = flag.String("bench", ".", "-bench=")
-	testLdflags = flag.String("ldflags", "", "-ldflags=")
-	testGcflags = flag.String("gcflags", "", "-gcflags=")
+	testRun      = flag.String("run", "NONE", "-test=")
+	testBench    = flag.String("bench", ".", "-bench=")
+	testBenchmem = flag.Bool("benchmem", false, "-benchmem=")
+	testLdflags  = flag.String("ldflags", "", "-ldflags=")
+	testGcflags  = flag.String("gcflags", "", "-gcflags=")
 
 	sleep = flag.Duration("sleep", 0, "time to sleep between benchmark runs")
-	// testBenchmem = flag.Bool("benchmem", false, "-benchmem") // TODO
 )
 
 func main() {
@@ -96,13 +96,13 @@ func main() {
 			start = time.Now()
 			printf(1, "Running before benchmarks: %s", pkg)
 			beforeBenches[pkg] += "\n"
-			beforeBenches[pkg] += beforeTest.run("-test.run=NONE", "-test.bench="+*testBench)
+			beforeBenches[pkg] += beforeTest.run("-test.run=NONE", "-test.bench="+*testBench, "-test.benchmem="+benchmemString())
 			beforeBenches[pkg] += "\n"
 			time.Sleep(*sleep)
 
 			printf(1, "Running after benchmarks: %s", pkg)
 			afterBenches[pkg] += "\n"
-			afterBenches[pkg] += afterTest.run("-test.run=NONE", "-test.bench="+*testBench)
+			afterBenches[pkg] += afterTest.run("-test.run=NONE", "-test.bench="+*testBench, "-test.benchmem="+benchmemString())
 			afterBenches[pkg] += "\n"
 
 			if beforeBenches[pkg] == "PASS" && afterBenches[pkg] == "PASS" {
@@ -150,7 +150,7 @@ func benchcmp(pkg, before, after string) string {
 	pkg = strings.Replace(pkg, "/", "-", -1)
 	beforef := writetemp("before-"+pkg+".bench", before)
 	afterf := writetemp("after-"+pkg+".bench", after)
-	cmd := exec.Command("benchcmp", "-mag", "-best", "-changed", beforef, afterf)
+	cmd := exec.Command("benchcmp", "-mag", "-best", beforef, afterf)
 	// don't die on errors, so don't use runCmd
 	printf(1, "Running %v", commandString(cmd))
 	out, _ := cmd.CombinedOutput()
@@ -225,7 +225,11 @@ func compileTests(goroot, prefix string, pkgs []string) map[string]compiledTest 
 		path := filepath.Join(tempdir, filename)
 		cmd := exec.Command("bin/go", "test", "-c", "-ldflags="+*testLdflags, "-gcflags="+*testGcflags, "-o", path, pkg)
 		cmd.Dir = goroot
-		cmd.Env = []string{"GOROOT=" + goroot, "PATH=" + os.Getenv("PATH")}
+		cmd.Env = []string{
+			"GOROOT=" + goroot,
+			"PATH=" + os.Getenv("PATH"),
+			"GOPATH=" + os.Getenv("GOPATH"),
+		}
 		runCmd(cmd)
 		// If there is no test file, don't claim that there is one
 		_, err := os.Stat(path)
@@ -286,4 +290,12 @@ func (c *count) Set(s string) error {
 
 func (c *count) IsBoolFlag() bool {
 	return true
+}
+
+func benchmemString() string {
+	if *testBenchmem {
+		return "true"
+	} else {
+		return "false"
+	}
 }
