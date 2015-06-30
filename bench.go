@@ -19,11 +19,12 @@ var (
 	gorootBefore = flag.String("before", "/Users/jbleechersnyder/src/go-cmp", "GOROOT for 'before'")
 	gorootAfter  = flag.String("after", "/Users/jbleechersnyder/src/go", "GOROOT for 'after'")
 
-	testRun      = flag.String("run", "NONE", "-test=")
-	testBench    = flag.String("bench", ".", "-bench=")
-	testBenchmem = flag.Bool("benchmem", false, "-benchmem=")
-	testLdflags  = flag.String("ldflags", "", "-ldflags=")
-	testGcflags  = flag.String("gcflags", "", "-gcflags=")
+	testRun       = flag.String("run", "NONE", "-test=")
+	testBench     = flag.String("bench", ".", "-bench=")
+	testBenchmem  = flag.Bool("benchmem", false, "-benchmem=")
+	testBenchtime = flag.Duration("benchtime", time.Second, "-benchtime=")
+	testLdflags   = flag.String("ldflags", "", "-ldflags=")
+	testGcflags   = flag.String("gcflags", "", "-gcflags=")
 
 	sleep = flag.Duration("sleep", 0, "time to sleep between benchmark runs")
 )
@@ -96,13 +97,13 @@ func main() {
 			start = time.Now()
 			printf(1, "Running before benchmarks: %s", pkg)
 			beforeBenches[pkg] += "\n"
-			beforeBenches[pkg] += beforeTest.run("-test.run=NONE", "-test.bench="+*testBench, "-test.benchmem="+benchmemString())
+			beforeBenches[pkg] += beforeTest.run("-test.run=NONE", "-test.bench="+*testBench, "-test.benchmem="+benchmemString(), "-test.benchtime="+testBenchtime.String())
 			beforeBenches[pkg] += "\n"
 			time.Sleep(*sleep)
 
 			printf(1, "Running after benchmarks: %s", pkg)
 			afterBenches[pkg] += "\n"
-			afterBenches[pkg] += afterTest.run("-test.run=NONE", "-test.bench="+*testBench, "-test.benchmem="+benchmemString())
+			afterBenches[pkg] += afterTest.run("-test.run=NONE", "-test.bench="+*testBench, "-test.benchmem="+benchmemString(), "-test.benchtime="+testBenchtime.String())
 			afterBenches[pkg] += "\n"
 
 			if beforeBenches[pkg] == "PASS" && afterBenches[pkg] == "PASS" {
